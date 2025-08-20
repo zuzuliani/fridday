@@ -73,6 +73,15 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     
+    # Check required environment variables
+    required_vars = ["SUPABASE_URL", "SUPABASE_KEY", "OPENAI_API_KEY", "DEFAULT_LLM"]
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
+        print("Please set them in your Railway dashboard environment variables")
+        exit(1)
+    
     host = os.getenv("APP_HOST", "0.0.0.0")
     # Railway sets PORT environment variable, fallback to APP_PORT, then 8000
     port = int(os.getenv("PORT", os.getenv("APP_PORT", 8000)))
@@ -80,6 +89,8 @@ if __name__ == "__main__":
     print(f"🚀 Starting BifrostAI Chatbot on {host}:{port}")
     print(f"📝 Environment: {os.getenv('VERSION', 'development')}")
     print(f"📚 API Docs: http://{host}:{port}/docs")
+    print(f"❤️ Health Check: http://{host}:{port}/api/v1/health")
+    print(f"✅ All required environment variables are set")
     
     uvicorn.run(
         "main:app",
