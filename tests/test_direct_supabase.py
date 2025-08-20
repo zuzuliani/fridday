@@ -18,7 +18,7 @@ def test_supabase_auth():
     # Method 1: Using local auth (known to work)
     print("📝 Test 1: Local Auth (SupAuth)")
     try:
-        from supabase_auth.supAuth import SupAuth
+        from auth_utils.supAuth import SupAuth
         sup_auth = SupAuth()
         
         # Try to create a session
@@ -84,7 +84,7 @@ def test_supabase_auth():
     # Method 4: Try using the same method as SupAuth but with JWT
     print(f"\n📝 Test 4: SupAuth Method with JWT")
     try:
-        from supabase_auth.supAuth import SupAuth
+        from auth_utils.supAuth import SupAuth
         sup_auth_jwt = SupAuth(token=JWT_TOKEN)
         
         # Try to create a session

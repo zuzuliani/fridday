@@ -22,7 +22,7 @@ class ChatbotClient:
         # For development mode, get token from local auth
         if not token and os.getenv("VERSION") == "development":
             try:
-                from supabase_auth.supAuth import SupAuth
+                from auth_utils.supAuth import SupAuth
                 sup_auth = SupAuth()
                 self.token = sup_auth.get_token()
                 print(f"✅ Using development token: {self.token[:20]}...")

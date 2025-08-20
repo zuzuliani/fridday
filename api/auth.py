@@ -25,7 +25,7 @@ def get_current_user(
     try:
         if os.getenv("VERSION") == "development":
             # For development, use local auth
-            from supabase_auth.supAuth import SupAuth
+            from auth_utils.supAuth import SupAuth
             sup_auth = SupAuth()
             return {
                 "id": sup_auth.session.user.id,
@@ -38,7 +38,7 @@ def get_current_user(
             
             try:
                 # Use SupAuth to validate the JWT token (proven method)
-                from supabase_auth.supAuth import SupAuth
+                from auth_utils.supAuth import SupAuth
                 sup_auth = SupAuth(token=token)
                 
                 # Verify the token by getting user info
@@ -85,6 +85,6 @@ def get_authenticated_supabase(
             return user["_supabase_client"]
         else:
             # Fallback: create new SupAuth instance
-            from supabase_auth.supAuth import SupAuth
+            from auth_utils.supAuth import SupAuth
             sup_auth = SupAuth(token=user["token"])
             return sup_auth.supabase

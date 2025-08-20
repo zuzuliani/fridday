@@ -23,7 +23,7 @@ async def test_chatbot():
     """Test the chatbot functionality."""
     
     # For testing, use local auth
-    from supabase_auth.supAuth import SupAuth
+    from auth_utils.supAuth import SupAuth
     sup_auth = SupAuth()
     user_id = sup_auth.session.user.id
     

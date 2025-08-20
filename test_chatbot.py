@@ -43,7 +43,7 @@ def initialize_chatbot():
     
     try:
         # Use SupAuth for proper authentication (same as your FastAPI app)
-        from supabase_auth.supAuth import SupAuth
+        from auth_utils.supAuth import SupAuth
         
         # Initialize with development authentication
         sup_auth = SupAuth()  # This will use email/password from .env

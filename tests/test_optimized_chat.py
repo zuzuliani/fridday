@@ -11,7 +11,7 @@ import asyncio
 import httpx
 import json
 from datetime import datetime
-from supabase_auth.supAuth import SupAuth
+from auth_utils.supAuth import SupAuth
 
 # Configuration
 BASE_URL = "http://localhost:8000/api/v1"
