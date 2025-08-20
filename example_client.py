@@ -1,5 +1,5 @@
 """
-Example client for testing the BifrostAI Chatbot API.
+Example client for testing the fridday-edith-ai Chatbot API.
 This demonstrates how to interact with the chatbot via HTTP requests.
 """
 
@@ -112,7 +112,7 @@ class ChatbotClient:
 
 async def demo_conversation():
     """Demonstrate a conversation with the chatbot."""
-    print("🤖 BifrostAI Chatbot Client Demo")
+    print("🤖 fridday-edith-ai Chatbot Client Demo")
     print("=" * 40)
     
     # Initialize client
@@ -163,7 +163,7 @@ async def demo_conversation():
 
 async def interactive_chat():
     """Interactive chat mode."""
-    print("🤖 BifrostAI Interactive Chat")
+    print("🤖 fridday-edith-ai Interactive Chat")
     print("Type 'quit' to exit, 'history' to see conversation history")
     print("=" * 50)
     

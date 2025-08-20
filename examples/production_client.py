@@ -1,5 +1,5 @@
 """
-Example client for using the BifrostAI Chatbot API in production (Railway deployment).
+Example client for using the fridday-edith-ai Chatbot API in production (Railway deployment).
 This shows how to interact with the deployed chatbot API.
 """
 
@@ -125,7 +125,7 @@ async def demo_production_api():
     RAILWAY_URL = "https://your-app.railway.app"  # Replace with your Railway URL
     JWT_TOKEN = "your_jwt_token_here"  # Replace with your Supabase JWT token
     
-    print("🚀 BifrostAI Production API Demo")
+    print("🚀 fridday-edith-ai Production API Demo")
     print("=" * 50)
     print(f"API URL: {RAILWAY_URL}")
     print(f"Token: {JWT_TOKEN[:20]}..." if JWT_TOKEN != "your_jwt_token_here" else "⚠️  Please set your JWT token")

@@ -1,4 +1,4 @@
-# BifrostAI Chatbot
+# fridday-edith-ai Chatbot
 
 A sophisticated chatbot built with LangChain, LangGraph, and Supabase, featuring session management and persistent memory.
 
@@ -222,7 +222,7 @@ APP_PORT=8000
 ### Project Structure
 
 ```
-bifrostai/
+fridday-edith-ai/
 ├── supabase_auth/          # Local authentication utilities
 ├── chatbot/                # Core chatbot logic
 │   ├── models.py          # Pydantic models

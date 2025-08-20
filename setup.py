@@ -1,5 +1,5 @@
 """
-Setup script for BifrostAI Chatbot.
+Setup script for fridday-edith-ai Chatbot.
 This script helps with initial setup and testing.
 """
 
@@ -73,7 +73,7 @@ def check_env_vars():
 
 def main():
     """Main setup function."""
-    print("🚀 BifrostAI Chatbot Setup")
+    print("🚀 fridday-edith-ai Chatbot Setup")
     print("=" * 40)
     
     # Check Python version

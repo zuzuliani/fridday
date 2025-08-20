@@ -1,4 +1,4 @@
-# BifrostAI Chatbot API Examples
+# fridday-edith-ai Chatbot API Examples
 
 These examples show how to interact with the deployed chatbot API using various tools.
 
