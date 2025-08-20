@@ -15,26 +15,34 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    # Initialize Supabase client
-    # In production, we use a basic client and authenticate per request
-    # In development, we use a pre-authenticated client
-    supabase = create_client(
-        os.getenv("SUPABASE_URL"),
-        os.getenv("SUPABASE_KEY")
-    )
-    
-    if os.getenv("VERSION") == "development":
-        print("🔧 Using development mode - authentication per request")
-    else:
-        print("🚀 Using production mode - JWT authentication")
-    
-    # Initialize chatbot
-    chatbot = Chatbot(supabase)
-    
-    # Set global chatbot instance
-    routes_module.chatbot_instance = chatbot
-    
-    print("🤖 Chatbot initialized successfully!")
+    try:
+        # Check if required environment variables are available
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+        
+        if supabase_url and supabase_key:
+            # Initialize Supabase client
+            supabase = create_client(supabase_url, supabase_key)
+            
+            if os.getenv("VERSION") == "development":
+                print("🔧 Using development mode - authentication per request")
+            else:
+                print("🚀 Using production mode - JWT authentication")
+            
+            # Initialize chatbot
+            chatbot = Chatbot(supabase)
+            
+            # Set global chatbot instance
+            routes_module.chatbot_instance = chatbot
+            
+            print("🤖 Chatbot initialized successfully!")
+        else:
+            print("⚠️ Supabase credentials not available - chatbot will be initialized per request")
+            routes_module.chatbot_instance = None
+    except Exception as e:
+        print(f"⚠️ Failed to initialize chatbot during startup: {e}")
+        print("App will continue to start - chatbot will be initialized per request")
+        routes_module.chatbot_instance = None
     
     yield
     
@@ -70,6 +78,16 @@ async def root():
         "docs": "/docs"
     }
 
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint for Railway."""
+    return {"status": "healthy", "service": "chatbot-api"}
+
+@app.get("/api/v1/health")
+async def health_check_v1():
+    """Health check endpoint with API prefix."""
+    return {"status": "healthy", "service": "chatbot-api"}
+
 if __name__ == "__main__":
     import uvicorn
     
@@ -78,9 +96,9 @@ if __name__ == "__main__":
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     
     if missing_vars:
-        print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
+        print(f"⚠️ Warning: Missing environment variables: {', '.join(missing_vars)}")
+        print("App will start but some features may not work properly")
         print("Please set them in your Railway dashboard environment variables")
-        exit(1)
     
     host = os.getenv("APP_HOST", "0.0.0.0")
     # Railway sets PORT environment variable, fallback to APP_PORT, then 8000
