@@ -7,10 +7,20 @@ class ChatMessage(BaseModel):
     content: str
     metadata: Optional[Dict[str, Any]] = {}
 
+class UserProfile(BaseModel):
+    """User profile information for prompt personalization"""
+    username: Optional[str] = None
+    companyName: Optional[str] = None
+    userRole: Optional[str] = None
+    userFunction: Optional[str] = None
+    communication_tone: Optional[str] = ""
+    additional_guidelines: Optional[str] = ""
+
 class ChatRequest(BaseModel):
     message: str
     session_id: str
     metadata: Optional[Dict[str, Any]] = {}
+    user_profile: Optional[UserProfile] = None
 
 class ChatResponse(BaseModel):
     message: str
@@ -35,6 +45,7 @@ class ConversationEntry(BaseModel):
     content: str
     status: Optional[str] = "complete"  # 'pending', 'processing', 'complete', 'failed'
     metadata: Optional[Dict[str, Any]] = {}
+    reflection_steps: Optional[List[Dict[str, Any]]] = None  # Array of JSONB for reflection data
     created_at: datetime
     updated_at: datetime
 

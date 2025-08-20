@@ -9,4 +9,3 @@ langchain-community>=0.1.0
 langchain-tavily>=0.1.0
 pydantic>=2.5.0
 streamlit>=1.28.0
-python-dotenv>=1.0.0

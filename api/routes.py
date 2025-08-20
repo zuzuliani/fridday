@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
-from chatbot import Chatbot, ChatRequest, ChatResponse, ChatSession, UpdateMessageRequest, UpdateMessageResponse
+from chatbot import Chatbot, ChatRequest, ChatResponse, ChatSession, UpdateMessageRequest, UpdateMessageResponse, UserProfile
 from .auth import get_current_user, get_authenticated_supabase
 
 router = APIRouter()
@@ -23,8 +23,37 @@ async def chat(
     user = Depends(get_current_user),
     authenticated_supabase = Depends(get_authenticated_supabase)
 ):
-    """Send a message to the chatbot."""
+    """
+    Send a message to the chatbot.
+    
+    The request can include a user_profile field for personalized responses.
+    If user_profile is not provided, you can optionally extract it from JWT data.
+    
+    Example request body:
+    {
+        "message": "Hello, can you help me with business strategy?",
+        "session_id": "session-uuid",
+        "user_profile": {
+            "username": "João Silva",
+            "companyName": "TechCorp", 
+            "userRole": "Gerente de Projetos",
+            "userFunction": "Diretor de TI",
+            "communication_tone": " - mais executivo",
+            "additional_guidelines": " - foque em ROI e métricas"
+        }
+    }
+    """
     try:
+        # Optional: If user_profile not provided, extract from JWT/user data
+        # Uncomment and modify based on your JWT structure:
+        # if not request.user_profile:
+        #     request.user_profile = UserProfile(
+        #         username=user.get("name") or user.get("username"),
+        #         companyName=user.get("company"),
+        #         userRole=user.get("role"),
+        #         userFunction=user.get("function")
+        #     )
+        
         # Create chatbot with authenticated Supabase client
         from chatbot import Chatbot
         chatbot = Chatbot(authenticated_supabase)

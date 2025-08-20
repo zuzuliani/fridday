@@ -59,24 +59,30 @@ class ChatbotMemory:
         # Persist to Supabase
         return self._persist_message("user", content, metadata or {})
     
-    def add_ai_message(self, content: str, metadata: Dict[str, Any] = None) -> str:
+    def add_ai_message(self, content: str, metadata: Dict[str, Any] = None, reflection_steps: List[Dict[str, Any]] = None) -> str:
         """Add AI message to memory and persist to Supabase."""
         # Add to LangChain memory
         self.memory.chat_memory.add_ai_message(content)
         
         # Persist to Supabase
-        return self._persist_message("assistant", content, metadata or {})
+        return self._persist_message("assistant", content, metadata or {}, reflection_steps)
     
-    def _persist_message(self, role: str, content: str, metadata: Dict[str, Any]) -> str:
+    def _persist_message(self, role: str, content: str, metadata: Dict[str, Any], reflection_steps: List[Dict[str, Any]] = None) -> str:
         """Persist message to Supabase."""
         try:
-            response = self.supabase.table("conversations").insert({
+            data = {
                 "user_id": self.user_id,
                 "session_id": self.session_id,
                 "role": role,
                 "content": content,
                 "metadata": metadata
-            }).execute()
+            }
+            
+            # Add reflection_steps if provided (only for AI messages with reasoning)
+            if reflection_steps:
+                data["reflection_steps"] = reflection_steps
+            
+            response = self.supabase.table("conversations").insert(data).execute()
             
             return response.data[0]["id"]
         except Exception as e:

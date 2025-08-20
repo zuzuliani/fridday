@@ -40,10 +40,10 @@ class SessionManager:
         try:
             response = self.supabase.table("chat_sessions").select("*").eq(
                 "id", session_id
-            ).eq("user_id", user_id).single().execute()
+            ).eq("user_id", user_id).execute()
             
-            if response.data:
-                session_data = response.data
+            if response.data and len(response.data) > 0:
+                session_data = response.data[0]
                 return ChatSession(
                     id=session_data["id"],
                     user_id=session_data["user_id"],
@@ -53,6 +53,7 @@ class SessionManager:
                     updated_at=datetime.fromisoformat(session_data["updated_at"].replace('Z', '+00:00')),
                     is_active=session_data["is_active"]
                 )
+            return None
         except Exception as e:
             print(f"Error getting session: {e}")
             return None

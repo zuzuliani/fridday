@@ -6,8 +6,10 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 import os
 from .memory import ChatbotMemory
 from .session_manager import SessionManager
-from .models import ChatRequest, ChatResponse
+from .models import ChatRequest, ChatResponse, UserProfile
 from .prompt_loader import get_chatbot_system_prompt
+from utils.query_router import QueryRouter
+from utils.react_reasoning import ReActReasoning
 
 class ChatbotState:
     """State for the chatbot graph."""
@@ -33,16 +35,37 @@ class Chatbot:
             openai_api_key=os.getenv("OPENAI_API_KEY")
         )
         
-        # Create conversation prompt
-        system_prompt_content = get_chatbot_system_prompt()
-        self.prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content=system_prompt_content),
-            MessagesPlaceholder(variable_name="history"),
-            HumanMessage(content="{input}")
-        ])
+        # Initialize routing components
+        self.query_router = QueryRouter()
+        self.react_reasoner = ReActReasoning()
+        
+        # Note: We'll create the prompt dynamically based on user profile
+        # The base template structure will be the same, but system content will vary
         
         # Create LangGraph workflow
         self.workflow = self._create_workflow()
+    
+    def _get_personalized_system_prompt(self, user_profile: UserProfile = None) -> str:
+        """Get system prompt personalized with user profile variables."""
+        if not user_profile:
+            # Use default prompt without variables
+            print("🔍 No user profile provided, using defaults")
+            return get_chatbot_system_prompt()
+        
+        # Convert user profile to dict for template variables
+        variables = {
+            "username": user_profile.username or "Usuário",
+            "companyName": user_profile.companyName or "Sua empresa",
+            "userRole": user_profile.userRole or "Profissional",
+            "userFunction": user_profile.userFunction or "Cargo não especificado",
+            "communication_tone": user_profile.communication_tone or "",
+            "additional_guidelines": user_profile.additional_guidelines or ""
+        }
+        
+        print(f"🔍 User profile variables: {variables}")
+        result = get_chatbot_system_prompt(variables=variables)
+        
+        return result
     
     def _create_workflow(self) -> StateGraph:
         """Create the LangGraph workflow for processing conversations."""
@@ -58,16 +81,51 @@ class Chatbot:
             
             return state
         
-        def generate_response(state: Dict[str, Any]) -> Dict[str, Any]:
-            """Generate AI response using LangChain."""
+        def route_query(state: Dict[str, Any]) -> Dict[str, Any]:
+            """Route the query to appropriate processing path."""
+            user_input = state["user_input"]
+            memory = state["memory"]
+            
+            # Get conversation context for routing
+            memory_vars = memory.get_memory_variables()
+            history_text = ""
+            if memory_vars.get("history"):
+                # Convert last few messages to text for context
+                recent_messages = memory_vars["history"][-3:]  # Last 3 messages
+                history_text = " | ".join([msg.content[:50] for msg in recent_messages])
+            
+            # Determine routing
+            route = self.query_router.route_query(user_input, history_text)
+            state["route"] = route
+            
+            print(f"🔍 Query routed to: {route.upper()}")
+            print(f"🔍 Route explanation: {self.query_router.get_routing_explanation(route, user_input)}")
+            
+            return state
+        
+        def generate_direct_response(state: Dict[str, Any]) -> Dict[str, Any]:
+            """Generate direct AI response for simple queries."""
             memory = state["memory"]
             user_input = state["user_input"]
+            user_profile = state.get("user_profile")
+            
+            print("🔍 Using DIRECT response path")
+            
+            # Get personalized system prompt
+            system_prompt_content = self._get_personalized_system_prompt(user_profile)
+            
+            # Create prompt with personalized system message
+            prompt = ChatPromptTemplate.from_messages([
+                SystemMessage(content=system_prompt_content),
+                MessagesPlaceholder(variable_name="history"),
+                HumanMessage(content="{input}")
+            ])
             
             # Get memory variables
             memory_vars = memory.get_memory_variables()
             
             # Format prompt with history
-            formatted_prompt = self.prompt.format_messages(
+            formatted_prompt = prompt.format_messages(
                 history=memory_vars.get("history", []),
                 input=user_input
             )
@@ -80,6 +138,61 @@ class Chatbot:
             memory.add_ai_message(ai_response, state.get("metadata", {}))
             
             state["ai_response"] = ai_response
+            state["reasoning_used"] = False
+            return state
+        
+        async def generate_react_response(state: Dict[str, Any]) -> Dict[str, Any]:
+            """Generate response using ReAct reasoning for complex queries."""
+            memory = state["memory"]
+            user_input = state["user_input"]
+            user_profile = state.get("user_profile")
+
+            print("🔍 Using REACT reasoning path")
+
+            # Get personalized system prompt
+            system_prompt_content = self._get_personalized_system_prompt(user_profile)
+
+            # Get conversation history
+            memory_vars = memory.get_memory_variables()
+            conversation_history = memory_vars.get("history", [])
+
+            # Create a placeholder conversation entry to get the ID for real-time updates
+            conversation_id = memory.add_ai_message("Processing...", {})
+            
+            # Process with ReAct reasoning
+            reasoning_result = await self.react_reasoner.process_with_reasoning(
+                user_input=user_input,
+                system_prompt=system_prompt_content,
+                conversation_history=conversation_history,
+                supabase_client=self.supabase,
+                conversation_id=conversation_id
+            )
+
+            ai_response = reasoning_result["final_answer"]
+
+            # Add reasoning metadata
+            metadata = state.get("metadata", {})
+            metadata.update({
+                "step_count": reasoning_result["step_count"],
+                "reasoning_used": True
+            })
+
+            # Update the placeholder conversation with final response and reflection steps
+            try:
+                self.supabase.table("conversations").update({
+                    "content": ai_response,
+                    "metadata": metadata,
+                    "reflection_steps": reasoning_result["reasoning_steps"]
+                }).eq("id", conversation_id).execute()
+                print(f"🔍 Updated conversation {conversation_id} with final response")
+            except Exception as e:
+                print(f"Error updating final conversation: {e}")
+                # Fallback to regular memory add if update fails
+                memory.add_ai_message(ai_response, metadata, reflection_steps=reasoning_result["reasoning_steps"])
+
+            state["ai_response"] = ai_response
+            state["reasoning_used"] = True
+            state["reasoning_steps"] = reasoning_result["reasoning_steps"]
             return state
         
         # Create workflow graph
@@ -87,11 +200,25 @@ class Chatbot:
         
         # Add nodes
         workflow.add_node("process_input", process_input)
-        workflow.add_node("generate_response", generate_response)
+        workflow.add_node("route_query", route_query)
+        workflow.add_node("generate_direct_response", generate_direct_response)
+        workflow.add_node("generate_react_response", generate_react_response)
         
         # Add edges
-        workflow.add_edge("process_input", "generate_response")
-        workflow.add_edge("generate_response", END)
+        workflow.add_edge("process_input", "route_query")
+        
+        # Conditional routing based on query complexity
+        workflow.add_conditional_edges(
+            "route_query",
+            lambda state: state["route"],
+            {
+                "direct": "generate_direct_response",
+                "react": "generate_react_response"
+            }
+        )
+        
+        workflow.add_edge("generate_direct_response", END)
+        workflow.add_edge("generate_react_response", END)
         
         # Set entry point
         workflow.set_entry_point("process_input")
@@ -120,7 +247,8 @@ class Chatbot:
                 "user_id": user_id,
                 "metadata": request.metadata or {},
                 "memory": memory,
-                "conversation_id": ""
+                "conversation_id": "",
+                "user_profile": request.user_profile
             }
             
             # Run workflow

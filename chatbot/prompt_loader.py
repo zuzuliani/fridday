@@ -1,13 +1,15 @@
 """
-Utility functions for loading prompts from files.
+Utility functions for loading prompts from files using LangChain PromptTemplates.
 """
 import os
 from pathlib import Path
+from langchain.prompts import PromptTemplate
+from typing import Dict, Any, Optional
 
 
-def load_prompt(prompt_name: str, subfolder: str = None, file_extension: str = None) -> str:
+def load_prompt_template(prompt_name: str, subfolder: str = None, file_extension: str = None) -> PromptTemplate:
     """
-    Load a prompt from the prompts directory.
+    Load a prompt template from the prompts directory.
     
     Args:
         prompt_name: Name of the prompt file (without extension)
@@ -15,7 +17,53 @@ def load_prompt(prompt_name: str, subfolder: str = None, file_extension: str = N
         file_extension: File extension to use (.md, .txt). If None, tries .md first, then .txt
         
     Returns:
-        Content of the prompt file
+        LangChain PromptTemplate object
+        
+    Raises:
+        FileNotFoundError: If the prompt file doesn't exist
+    """
+    template_content = _load_prompt_file(prompt_name, subfolder, file_extension)
+    return PromptTemplate.from_template(template_content)
+
+
+def load_prompt(prompt_name: str, subfolder: str = None, file_extension: str = None, 
+                variables: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Load and format a prompt from the prompts directory.
+    
+    Args:
+        prompt_name: Name of the prompt file (without extension)
+        subfolder: Optional subfolder within prompts directory
+        file_extension: File extension to use (.md, .txt). If None, tries .md first, then .txt
+        variables: Optional dictionary of variables to format the template
+        
+    Returns:
+        Formatted prompt content
+        
+    Raises:
+        FileNotFoundError: If the prompt file doesn't exist
+    """
+    template = load_prompt_template(prompt_name, subfolder, file_extension)
+    
+    if variables:
+        result = template.format(**variables)
+        return result
+    else:
+        # Return the template as-is if no variables provided
+        return template.template
+
+
+def _load_prompt_file(prompt_name: str, subfolder: str = None, file_extension: str = None) -> str:
+    """
+    Internal function to load prompt file content.
+    
+    Args:
+        prompt_name: Name of the prompt file (without extension)
+        subfolder: Optional subfolder within prompts directory
+        file_extension: File extension to use (.md, .txt). If None, tries .md first, then .txt
+        
+    Returns:
+        Raw content of the prompt file
         
     Raises:
         FileNotFoundError: If the prompt file doesn't exist
@@ -49,11 +97,36 @@ def load_prompt(prompt_name: str, subfolder: str = None, file_extension: str = N
     raise FileNotFoundError(f"Prompt file not found: {search_path} (tried extensions: {extensions_to_try})")
 
 
-def get_chatbot_system_prompt() -> str:
+def get_chatbot_system_prompt(variables: Optional[Dict[str, Any]] = None) -> str:
     """
     Get the system prompt for the chatbot.
     
+    Args:
+        variables: Optional dictionary of variables to customize the prompt
+    
     Returns:
-        The chatbot system prompt content
+        The chatbot system prompt content (formatted if variables provided)
     """
-    return load_prompt("system_prompt", "chatbot")
+    if variables:
+        return load_prompt("system_prompt", "chatbot", variables=variables)
+    else:
+        # When no variables provided, load template and use default values
+        default_variables = {
+            "username": "Usuário",
+            "companyName": "sua empresa",
+            "userRole": "Profissional",
+            "userFunction": "cargo atual",
+            "communication_tone": "",
+            "additional_guidelines": ""
+        }
+        return load_prompt("system_prompt", "chatbot", variables=default_variables)
+
+
+def get_chatbot_system_prompt_template() -> PromptTemplate:
+    """
+    Get the system prompt template for the chatbot.
+    
+    Returns:
+        LangChain PromptTemplate object for the chatbot system prompt
+    """
+    return load_prompt_template("system_prompt", "chatbot")

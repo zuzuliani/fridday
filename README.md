@@ -99,9 +99,19 @@ Send a message to the chatbot.
 {
   "message": "Hello, how are you?",
   "session_id": "session-uuid",
-  "metadata": {}
+  "metadata": {},
+  "user_profile": {
+    "username": "João Silva",
+    "companyName": "TechCorp",
+    "userRole": "Gerente de Projetos", 
+    "userFunction": "Diretor de TI",
+    "communication_tone": " - mais executivo",
+    "additional_guidelines": " - foque em ROI e métricas"
+  }
 }
 ```
+
+**Note:** The `user_profile` field is optional. If not provided, the chatbot uses default prompt without personalization.
 
 **Response:**
 ```json
