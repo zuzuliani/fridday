@@ -562,3 +562,132 @@ class Chatbot:
         )
         
         return reasoning_result["final_answer"]
+    
+    async def start_message_processing(self, request, user_id: str):
+        """Start processing an assistant message in the background - returns immediately."""
+        from .models import ProcessingStartedResponse
+        import asyncio
+        
+        try:
+            # 1. Verify message exists and belongs to user
+            message_response = self.supabase.table("conversations").select("*").eq(
+                "id", request.message_id
+            ).eq("user_id", user_id).single().execute()
+            
+            if not message_response.data:
+                raise Exception("Message not found or access denied")
+            
+            message = message_response.data
+            session_id = message["session_id"]
+            
+            # 2. Immediately set status to "processing"
+            self.supabase.table("conversations").update({
+                "status": "processing"
+            }).eq("id", request.message_id).execute()
+            
+            # 3. Start background task (fire and forget)
+            asyncio.create_task(self._process_message_background(request, user_id))
+            
+            # 4. Return immediately with processing status
+            return ProcessingStartedResponse(
+                message_id=request.message_id,
+                status="processing",
+                session_id=session_id,
+                message="Message processing started - watch database for completion"
+            )
+            
+        except Exception as e:
+            # Try to mark as failed if we have the message_id
+            try:
+                self.supabase.table("conversations").update({
+                    "status": "failed",
+                    "content": f"Error: {str(e)}"
+                }).eq("id", request.message_id).execute()
+            except:
+                pass
+            
+            print(f"Error in start_message_processing: {e}")
+            raise
+    
+    async def _process_message_background(self, request, user_id: str):
+        """Background task to process the message - this runs asynchronously."""
+        try:
+            print(f"🔄 Starting background processing for message {request.message_id}")
+            
+            # Get message info
+            message_response = self.supabase.table("conversations").select("*").eq(
+                "id", request.message_id
+            ).eq("user_id", user_id).single().execute()
+            
+            if not message_response.data:
+                raise Exception("Message not found during background processing")
+            
+            message = message_response.data
+            session_id = message["session_id"]
+            
+            # Get conversation context (excluding the empty assistant message)
+            context_response = self.supabase.table("conversations").select("*").eq(
+                "session_id", session_id
+            ).eq("user_id", user_id).order("created_at", desc=False).limit(
+                request.context_limit * 2  # Get more to account for filtering
+            ).execute()
+            
+            context_messages = []
+            for msg in context_response.data:
+                if msg["id"] != request.message_id:  # Don't include the empty assistant message
+                    context_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+            
+            # Take only the last context_limit messages after filtering
+            context_messages = context_messages[-request.context_limit:]
+            
+            # Determine routing based on the last user message
+            last_user_message = ""
+            for msg in reversed(context_messages):
+                if msg["role"] == "user":
+                    last_user_message = msg["content"]
+                    break
+            
+            # Route the query
+            route = "direct"
+            if last_user_message:
+                complex_keywords = ["pesquisar", "buscar", "comparar", "analisar", "research", "search", "compare", "analyze"]
+                if any(keyword in last_user_message.lower() for keyword in complex_keywords):
+                    route = "react"
+            
+            print(f"🔍 Background processing with route: {route.upper()}")
+            
+            # Get personalized system prompt
+            system_prompt_content = self._get_personalized_system_prompt(request.user_profile)
+            
+            # Generate response based on route
+            if route == "react":
+                assistant_content = await self._generate_react_response_for_update(
+                    context_messages, system_prompt_content, request.message_id
+                )
+            else:
+                assistant_content = await self._generate_direct_response_for_update(
+                    context_messages, system_prompt_content
+                )
+            
+            # Update the assistant message with final response
+            self.supabase.table("conversations").update({
+                "content": assistant_content,
+                "status": "complete"
+            }).eq("id", request.message_id).execute()
+            
+            print(f"✅ Background processing completed for message {request.message_id}")
+            
+        except Exception as e:
+            print(f"❌ Background processing failed for message {request.message_id}: {e}")
+            
+            # Mark as failed
+            try:
+                self.supabase.table("conversations").update({
+                    "status": "failed",
+                    "content": f"Processing failed: {str(e)}"
+                }).eq("id", request.message_id).execute()
+            except:
+                pass

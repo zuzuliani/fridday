@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
-from chatbot import Chatbot, ChatRequest, ChatResponse, ChatSession, UpdateMessageRequest, UpdateMessageWithProfileRequest, UpdateMessageResponse, UserProfile
+from chatbot import Chatbot, ChatRequest, ChatResponse, ChatSession, UpdateMessageRequest, UpdateMessageWithProfileRequest, UpdateMessageResponse, ProcessingStartedResponse, UserProfile
 from .auth import get_current_user, get_authenticated_supabase
 
 router = APIRouter()
@@ -163,20 +163,25 @@ async def update_message(
             detail=f"Update message error: {str(e)}"
         )
 
-@router.post("/chat/update-with-profile", response_model=UpdateMessageResponse)
+@router.post("/chat/update-with-profile")
 async def update_message_with_profile(
     request: UpdateMessageWithProfileRequest,
     user = Depends(get_current_user),
     authenticated_supabase = Depends(get_authenticated_supabase)
 ):
     """
-    Update an assistant message with personalized LLM response - for WeWeb organic chat flow.
+    Start processing an assistant message with personalized LLM response - for WeWeb organic chat flow.
+    
+    This endpoint IMMEDIATELY returns with "processing" status and processes the AI response in the background.
+    WeWeb should watch the database for status changes from "processing" to "complete".
     
     This endpoint is designed for the WeWeb workflow where:
     1. WeWeb creates user message in Supabase
     2. WeWeb creates empty assistant message in Supabase  
     3. WeWeb calls this endpoint with the assistant message ID
-    4. API reads conversation context and updates the assistant message
+    4. API immediately returns "processing" status
+    5. API processes AI response in background and updates database
+    6. WeWeb watches database for completion
     
     Example request body:
     {
@@ -196,12 +201,15 @@ async def update_message_with_profile(
         # Create chatbot with authenticated Supabase client
         from chatbot import Chatbot
         chatbot = Chatbot(authenticated_supabase)
-        response = await chatbot.update_message_with_profile(request, user["id"])
+        
+        # Start background processing - this returns immediately
+        response = await chatbot.start_message_processing(request, user["id"])
         return response
+        
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Update message with profile error: {str(e)}"
+            detail=f"Start message processing error: {str(e)}"
         )
 
 @router.get("/health")

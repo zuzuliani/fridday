@@ -64,3 +64,9 @@ class UpdateMessageResponse(BaseModel):
     status: str
     session_id: str
     updated_at: datetime
+
+class ProcessingStartedResponse(BaseModel):
+    message_id: str
+    status: str  # Will be "processing"
+    session_id: str
+    message: str  # Confirmation message
