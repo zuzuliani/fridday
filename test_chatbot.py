@@ -81,33 +81,16 @@ def run_async_chat(chatbot, request, user_id):
     finally:
         loop.close()
 
-def run_async_chat_with_reflection(chatbot, request, user_id, reflection_placeholder):
-    """Run async chat with simulated real-time reflection step updates."""
+def run_async_chat_with_real_time_info(chatbot, request, user_id, routing_placeholder, reasoning_placeholder):
+    """Run async chat with real-time routing and reasoning information."""
     import time
-    
-    # Show initial thinking message
-    with reflection_placeholder.container():
-        st.write("🧠 **AI is thinking...**")
-        thinking_progress = st.progress(0)
-        status_text = st.empty()
-        step_container = st.container()
-    
-    # Simulate progress steps
-    progress_steps = [
-        (0.1, "🤔 Analyzing query complexity..."),
-        (0.3, "💭 Generating initial response..."),
-        (0.6, "🔍 Reflecting on response quality..."),
-        (0.8, "✨ Finalizing response..."),
-        (1.0, "✅ Complete!")
-    ]
+    import threading
     
     # Start async chat
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
-        # Show progress simulation while chat runs
-        import threading
         result_container = {"response": None, "error": None, "completed": False}
         
         def chat_worker():
@@ -122,51 +105,87 @@ def run_async_chat_with_reflection(chatbot, request, user_id, reflection_placeho
         chat_thread = threading.Thread(target=chat_worker)
         chat_thread.start()
         
-        # Show progress while waiting
-        step_index = 0
-        while not result_container["completed"] and step_index < len(progress_steps):
-            progress, message = progress_steps[step_index]
-            thinking_progress.progress(progress)
-            status_text.text(message)
-            
-            # Wait a bit for each step
-            time.sleep(2)
-            step_index += 1
-        
         # Wait for completion
         chat_thread.join()
         
-        # Complete progress
-        thinking_progress.progress(1.0)
-        status_text.text("✅ Response ready!")
-        
-        # Try to get actual reflection steps if available
-        try:
-            if result_container["response"]:
-                response = result_container["response"]
-                # Query for reflection steps after completion
-                conversations = chatbot.supabase.table("conversations").select("*").eq(
-                    "id", response.conversation_id
-                ).execute()
-                
-                if conversations.data and conversations.data[0].get("reflection_steps"):
-                    reflection_steps = conversations.data[0]["reflection_steps"]
-                    with step_container:
-                        st.write("**🧠 AI Thought Process:**")
-                        display_reflection_steps_simple(reflection_steps)
-        except Exception as e:
-            print(f"Error fetching reflection steps: {e}")
-        
+        # Handle errors
         if result_container["error"]:
-            raise result_container["error"]
+            routing_placeholder.empty()
+            reasoning_placeholder.empty()
+            st.error(f"❌ Error during chat: {result_container['error']}")
+            return None
+            
+        response = result_container["response"]
         
-        return result_container["response"]
+        # Debug: Show what we received
+        if response:
+            st.info(f"🔍 Debug - Response metadata keys: {list(response.metadata.keys()) if response.metadata else 'No metadata'}")
+            if response.metadata and "routing_info" in response.metadata:
+                st.success(f"🔍 Debug - Routing info: {response.metadata['routing_info']}")
+            else:
+                st.error("🔍 Debug - No routing_info found in metadata!")
         
+        # Show routing information
+        if response and response.metadata and "routing_info" in response.metadata:
+            routing_info = response.metadata["routing_info"]
+            route = routing_info["route"]
+            explanation = routing_info["explanation"]
+            
+            with routing_placeholder.container():
+                if route == "direct":
+                    st.write(f"🎯 **Rota direta** - {explanation}")
+                else:
+                    st.write(f"🧠 **Raciocínio estruturado** - {explanation}")
+        else:
+            routing_placeholder.empty()
+        
+        # Show reasoning steps if ReAct was used
+        if (response and response.metadata and 
+            "routing_info" in response.metadata and 
+            response.metadata["routing_info"]["route"] == "react" and
+            "reasoning_steps" in response.metadata):
+            
+            display_latest_reasoning_step(reasoning_placeholder, response.metadata["reasoning_steps"])
+        else:
+            reasoning_placeholder.empty()
+        
+        return response
+        
+    except Exception as e:
+        routing_placeholder.empty()
+        reasoning_placeholder.empty()
+        st.error(f"❌ Error during chat: {e}")
+        return None
+    
     finally:
         loop.close()
-        # Clear the thinking display after a moment
-        time.sleep(1)
-        reflection_placeholder.empty()
+
+def display_latest_reasoning_step(placeholder, reflection_steps):
+    """Display the latest reasoning step for real-time feedback."""
+    if not reflection_steps:
+        return
+    
+    # Get the latest step (the most advanced one)
+    latest_step = max(reflection_steps, key=lambda x: x.get("step", 0))
+    
+    step_type = latest_step.get("type", "unknown")
+    content = latest_step.get("content", "")
+    
+    # Choose emoji and message based on step type
+    step_display = {
+        "generation_start": ("💭", "Gerando resposta inicial..."),
+        "generation": ("✍️", "Resposta inicial criada"),
+        "reflection_start": ("🤔", "Analisando qualidade da resposta..."),
+        "reflection": ("🔍", f"Reflexão: {content[:100]}..."),
+        "revision_start": ("✨", "Melhorando resposta..."),
+        "revision": ("🔧", "Resposta aprimorada"),
+        "finalization": ("✅", "Resposta aprovada sem revisão")
+    }
+    
+    emoji, message = step_display.get(step_type, ("🔄", content[:100] + "..."))
+    
+    with placeholder.container():
+        st.write(f"{emoji} **{message}**")
 
 def display_reflection_steps(placeholder, reflection_steps):
     """Display reflection steps in the Streamlit placeholder."""
@@ -428,7 +447,9 @@ def main():
                     else:
                         st.write("👤 No user profile configured - using defaults")
 
-                    st.write("🤖 Processing with intelligent routing...")
+                    routing_placeholder = st.empty()
+                    with routing_placeholder.container():
+                        st.write("🤖 Processing with intelligent routing...")
 
                     # Create chat request with user profile
                     chat_request = ChatRequest(
@@ -438,15 +459,16 @@ def main():
                         user_profile=st.session_state.user_profile
                     )
 
-                    # Create a placeholder for reflection steps
-                    reflection_placeholder = st.empty()
+                    # Create a placeholder for reasoning steps  
+                    reasoning_placeholder = st.empty()
                     
-                    # Start async chat and poll for reflection steps
-                    response = run_async_chat_with_reflection(
+                    # Start async chat and show real-time information
+                    response = run_async_chat_with_real_time_info(
                         chatbot,
                         chat_request,
                         authenticated_user_id,
-                        reflection_placeholder
+                        routing_placeholder,
+                        reasoning_placeholder
                     )
                     
                     # IMPORTANT: Update session ID if chatbot created a new session

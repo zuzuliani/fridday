@@ -130,3 +130,43 @@ def get_chatbot_system_prompt_template() -> PromptTemplate:
         LangChain PromptTemplate object for the chatbot system prompt
     """
     return load_prompt_template("system_prompt", "chatbot")
+
+
+# React Reasoning Prompt Functions
+def get_react_generate_prompt(variables: Dict[str, Any]) -> str:
+    """
+    Get the generate prompt for react reasoning.
+    
+    Args:
+        variables: Dictionary containing system_prompt, context, and user_input
+    
+    Returns:
+        Formatted generate prompt content
+    """
+    return load_prompt("generate_prompt", "react_reasoning", variables=variables)
+
+
+def get_react_reflection_prompt(variables: Dict[str, Any]) -> str:
+    """
+    Get the reflection prompt for react reasoning.
+    
+    Args:
+        variables: Dictionary containing user_input and draft_response
+    
+    Returns:
+        Formatted reflection prompt content
+    """
+    return load_prompt("reflection_prompt", "react_reasoning", variables=variables)
+
+
+def get_react_revision_prompt(variables: Dict[str, Any]) -> str:
+    """
+    Get the revision prompt for react reasoning.
+    
+    Args:
+        variables: Dictionary containing system_prompt, user_input, draft_response, and reflection
+    
+    Returns:
+        Formatted revision prompt content
+    """
+    return load_prompt("revision_prompt", "react_reasoning", variables=variables)

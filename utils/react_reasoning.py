@@ -17,6 +17,12 @@ from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from datetime import datetime
 import os
+import sys
+from pathlib import Path
+
+# Add the parent directory to the path to import from chatbot module
+sys.path.append(str(Path(__file__).parent.parent))
+from chatbot.prompt_loader import get_react_generate_prompt, get_react_reflection_prompt, get_react_revision_prompt
 
 class ReflectionState(TypedDict):
     """State for reflection workflow"""
@@ -250,59 +256,37 @@ class ReActReasoning:
         
         context = self._format_history(state["conversation_history"])
         
-        content = f"""
-{state["system_prompt"]}
-
-Contexto da conversa: {context}
-
-Pergunta do usuário: {state["user_input"]}
-
-Responda como uma consultora experiente em uma conversa natural. Seja direta, prática e conversacional - não escreva um relatório formal. Se for algo complexo, organize suas ideias mas mantenha o tom de conversa entre profissionais.
-"""
+        # Use the prompt management system
+        content = get_react_generate_prompt({
+            "system_prompt": state["system_prompt"],
+            "context": context,
+            "user_input": state["user_input"]
+        })
+        
         return SystemMessage(content=content)
     
     def _create_reflection_prompt(self, state: ReflectionState) -> SystemMessage:
         """Create prompt for reflecting on the draft response."""
         
-        content = f"""
-Você é uma consultora senior revisando uma conversa. Avalie se esta resposta está boa para um cliente:
-
-PERGUNTA: {state["user_input"]}
-
-RESPOSTA DADA:
-{state["draft_response"]}
-
-Analise rapidamente:
-1. A resposta soa conversacional e natural?
-2. Está completa mas não excessivamente formal?
-3. É útil e prática para o usuário?
-4. Mantém o tom de consultora experiente?
-
-Se vê algo para melhorar (tom muito formal, falta clareza, muito técnico, etc.), mencione usando palavras como "melhorar", "adicionar", "melhor".
-Se está boa assim, diga que está adequada.
-
-Avaliação:
-"""
+        # Use the prompt management system
+        content = get_react_reflection_prompt({
+            "user_input": state["user_input"],
+            "draft_response": state["draft_response"]
+        })
+        
         return SystemMessage(content=content)
     
     def _create_revision_prompt(self, state: ReflectionState) -> SystemMessage:
         """Create prompt for revising the response based on reflection."""
         
-        content = f"""
-{state["system_prompt"]}
-
-PERGUNTA: {state["user_input"]}
-
-RESPOSTA ANTERIOR:
-{state["draft_response"]}
-
-FEEDBACK DA REVISÃO:
-{state["reflection"]}
-
-Agora melhore a resposta baseada no feedback, mantendo sempre o tom conversacional de consultora experiente. Não transforme em relatório - mantenha como uma conversa natural e prática.
-
-RESPOSTA MELHORADA:
-"""
+        # Use the prompt management system
+        content = get_react_revision_prompt({
+            "system_prompt": state["system_prompt"],
+            "user_input": state["user_input"],
+            "draft_response": state["draft_response"],
+            "reflection": state["reflection"]
+        })
+        
         return SystemMessage(content=content)
     
     def _format_history(self, conversation_history: List) -> str:

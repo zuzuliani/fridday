@@ -133,9 +133,9 @@ Classificação:""")
         """Get a human-readable explanation of why this route was chosen."""
         
         if route == "direct":
-            return "Pergunta simples - resposta direta"
+            return "Pergunta simples - resposta direta e conversacional"
         else:
-            return "Pergunta complexa - análise estruturada com raciocínio"
+            return "Pergunta complexa - usando análise estruturada com múltiplas etapas"
 
 
 # Utility functions for easy import

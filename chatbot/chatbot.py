@@ -96,10 +96,19 @@ class Chatbot:
             
             # Determine routing
             route = self.query_router.route_query(user_input, history_text)
+            route_explanation = self.query_router.get_routing_explanation(route, user_input)
+            
             state["route"] = route
+            state["route_explanation"] = route_explanation
+            state["routing_info"] = {
+                "route": route,
+                "explanation": route_explanation,
+                "user_input": user_input[:100] + "..." if len(user_input) > 100 else user_input
+            }
             
             print(f"🔍 Query routed to: {route.upper()}")
-            print(f"🔍 Route explanation: {self.query_router.get_routing_explanation(route, user_input)}")
+            print(f"🔍 Route explanation: {route_explanation}")
+            print(f"🔍 Routing info created: {state['routing_info']}")
             
             return state
         
@@ -139,6 +148,13 @@ class Chatbot:
             
             state["ai_response"] = ai_response
             state["reasoning_used"] = False
+            
+            # Include routing info in metadata
+            metadata = state.get("metadata", {})
+            if "routing_info" in state:
+                metadata["routing_info"] = state["routing_info"]
+            state["metadata"] = metadata
+            
             return state
         
         async def generate_react_response(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -193,6 +209,11 @@ class Chatbot:
             state["ai_response"] = ai_response
             state["reasoning_used"] = True
             state["reasoning_steps"] = reasoning_result["reasoning_steps"]
+            
+            # Include routing info in metadata
+            if "routing_info" in state:
+                metadata["routing_info"] = state["routing_info"]
+            
             return state
         
         # Create workflow graph
@@ -257,11 +278,22 @@ class Chatbot:
             # Update session timestamp
             self.session_manager.update_session(session.id, user_id)
             
+            # Include routing information in metadata
+            response_metadata = result.get("metadata", {})
+            if "routing_info" in result:
+                response_metadata["routing_info"] = result["routing_info"]
+                print(f"🔍 Added routing_info to response: {result['routing_info']}")
+            if "reasoning_steps" in result:
+                response_metadata["reasoning_steps"] = result["reasoning_steps"]
+                print(f"🔍 Added reasoning_steps to response: {len(result['reasoning_steps'])} steps")
+            
+            print(f"🔍 Final response metadata keys: {list(response_metadata.keys())}")
+            
             return ChatResponse(
                 message=result["ai_response"],
                 session_id=session.id,
                 conversation_id=result["conversation_id"],
-                metadata=result.get("metadata", {})
+                metadata=response_metadata
             )
             
         except Exception as e:
