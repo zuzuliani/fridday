@@ -15,13 +15,19 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    print("🚀 Starting application lifespan manager...")
+    
     try:
         # Check if required environment variables are available
         supabase_url = os.getenv("SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_KEY")
         
+        print(f"🔍 Environment check - SUPABASE_URL: {'✓' if supabase_url else '✗'}")
+        print(f"🔍 Environment check - SUPABASE_KEY: {'✓' if supabase_key else '✗'}")
+        
         if supabase_url and supabase_key:
             # Initialize Supabase client
+            print("🔌 Connecting to Supabase...")
             supabase = create_client(supabase_url, supabase_key)
             
             if os.getenv("VERSION") == "development":
@@ -30,19 +36,24 @@ async def lifespan(app: FastAPI):
                 print("🚀 Using production mode - JWT authentication")
             
             # Initialize chatbot
+            print("🤖 Initializing chatbot...")
             chatbot = Chatbot(supabase)
             
             # Set global chatbot instance
             routes_module.chatbot_instance = chatbot
             
-            print("🤖 Chatbot initialized successfully!")
+            print("✅ Chatbot initialized successfully!")
         else:
             print("⚠️ Supabase credentials not available - chatbot will be initialized per request")
             routes_module.chatbot_instance = None
+            
     except Exception as e:
-        print(f"⚠️ Failed to initialize chatbot during startup: {e}")
-        print("App will continue to start - chatbot will be initialized per request")
+        print(f"❌ Failed to initialize chatbot during startup: {e}")
+        print(f"📝 Error details: {type(e).__name__}: {str(e)}")
+        print("⚠️ App will continue to start - chatbot will be initialized per request")
         routes_module.chatbot_instance = None
+    
+    print("✅ Application startup completed - health checks should now work")
     
     yield
     
@@ -81,12 +92,20 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Simple health check endpoint for Railway."""
-    return {"status": "healthy", "service": "chatbot-api"}
+    try:
+        # Basic health check - always return healthy if the app is running
+        return {"status": "healthy", "service": "chatbot-api"}
+    except Exception as e:
+        # Even if there are issues, return a response so Railway knows the app is running
+        return {"status": "degraded", "service": "chatbot-api", "error": str(e)}
 
 @app.get("/api/v1/health")
 async def health_check_v1():
     """Health check endpoint with API prefix."""
-    return {"status": "healthy", "service": "chatbot-api"}
+    try:
+        return {"status": "healthy", "service": "chatbot-api"}
+    except Exception as e:
+        return {"status": "degraded", "service": "chatbot-api", "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

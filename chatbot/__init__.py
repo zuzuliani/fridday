@@ -1,5 +1,5 @@
 from .chatbot import Chatbot
-from .models import ChatRequest, ChatResponse, ChatMessage, ChatSession, UpdateMessageRequest, UpdateMessageResponse, UserProfile
+from .models import ChatRequest, ChatResponse, ChatMessage, ChatSession, UpdateMessageRequest, UpdateMessageWithProfileRequest, UpdateMessageResponse, ProcessingStartedResponse, UserProfile
 from .memory import ChatbotMemory
 from .session_manager import SessionManager
 from .prompt_loader import (
@@ -14,7 +14,9 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "UpdateMessageRequest",
+    "UpdateMessageWithProfileRequest",
     "UpdateMessageResponse",
+    "ProcessingStartedResponse",
     "UserProfile",
     "ChatbotMemory",
     "SessionManager",

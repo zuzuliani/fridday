@@ -586,7 +586,16 @@ class Chatbot:
             }).eq("id", request.message_id).execute()
             
             # 3. Start background task (fire and forget)
-            asyncio.create_task(self._process_message_background(request, user_id))
+            try:
+                asyncio.create_task(self._process_message_background(request, user_id))
+            except Exception as task_error:
+                print(f"⚠️ Warning: Could not create background task: {task_error}")
+                # Mark message as failed if we can't start processing
+                self.supabase.table("conversations").update({
+                    "status": "failed",
+                    "content": f"Could not start background processing: {str(task_error)}"
+                }).eq("id", request.message_id).execute()
+                raise Exception(f"Background task creation failed: {str(task_error)}")
             
             # 4. Return immediately with processing status
             return ProcessingStartedResponse(
