@@ -53,6 +53,11 @@ class UpdateMessageRequest(BaseModel):
     message_id: str
     context_limit: Optional[int] = 10  # How many previous messages to include as context
 
+class UpdateMessageWithProfileRequest(BaseModel):
+    message_id: str
+    context_limit: Optional[int] = 10  # How many previous messages to include as context
+    user_profile: Optional[UserProfile] = None  # For personalized responses
+
 class UpdateMessageResponse(BaseModel):
     message_id: str
     content: str

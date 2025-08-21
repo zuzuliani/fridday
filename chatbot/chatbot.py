@@ -410,3 +410,155 @@ class Chatbot:
             
             print(f"Error in update_message: {e}")
             raise
+
+    async def update_message_with_profile(self, request, user_id: str):
+        """Update an assistant message with personalized LLM response - for WeWeb organic chat flow."""
+        from .models import UpdateMessageResponse
+        from datetime import datetime
+        
+        try:
+            # 1. Get the message to update and verify ownership
+            message_response = self.supabase.table("conversations").select("*").eq(
+                "id", request.message_id
+            ).eq("user_id", user_id).single().execute()
+            
+            if not message_response.data:
+                raise Exception("Message not found or access denied")
+            
+            message = message_response.data
+            session_id = message["session_id"]
+            
+            # 2. Update status to 'processing'
+            self.supabase.table("conversations").update({
+                "status": "processing"
+            }).eq("id", request.message_id).execute()
+            
+            # 3. Get recent conversation context (excluding the empty assistant message)
+            context_response = self.supabase.table("conversations").select("*").eq(
+                "session_id", session_id
+            ).eq("user_id", user_id).order("created_at", desc=False).limit(
+                request.context_limit * 2  # Get more to account for filtering
+            ).execute()
+            
+            context_messages = []
+            for msg in context_response.data:
+                if msg["id"] != request.message_id:  # Don't include the empty assistant message
+                    context_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+            
+            # Take only the last context_limit messages after filtering
+            context_messages = context_messages[-request.context_limit:]
+            
+            # 4. Determine if we should use ReAct reasoning based on the last user message
+            last_user_message = ""
+            for msg in reversed(context_messages):
+                if msg["role"] == "user":
+                    last_user_message = msg["content"]
+                    break
+            
+            # Route the query to determine processing approach
+            route = "direct"
+            if last_user_message:
+                # Simple routing logic - you can enhance this
+                complex_keywords = ["pesquisar", "buscar", "comparar", "analisar", "research", "search", "compare", "analyze"]
+                if any(keyword in last_user_message.lower() for keyword in complex_keywords):
+                    route = "react"
+            
+            print(f"🔍 Processing with route: {route.upper()}")
+            
+            # 5. Get personalized system prompt
+            system_prompt_content = self._get_personalized_system_prompt(request.user_profile)
+            
+            # 6. Generate response based on route
+            if route == "react":
+                # Use ReAct reasoning for complex queries
+                assistant_content = await self._generate_react_response_for_update(
+                    context_messages, system_prompt_content, request.message_id
+                )
+            else:
+                # Use direct response for simple queries
+                assistant_content = await self._generate_direct_response_for_update(
+                    context_messages, system_prompt_content
+                )
+            
+            # 7. Update the assistant message with final response
+            update_response = self.supabase.table("conversations").update({
+                "content": assistant_content,
+                "status": "complete"
+            }).eq("id", request.message_id).execute()
+            
+            updated_message = update_response.data[0]
+            
+            return UpdateMessageResponse(
+                message_id=updated_message["id"],
+                content=updated_message["content"],
+                status=updated_message["status"],
+                session_id=updated_message["session_id"],
+                updated_at=datetime.fromisoformat(updated_message["updated_at"].replace('Z', '+00:00'))
+            )
+            
+        except Exception as e:
+            # Try to mark as failed if we have the message_id
+            try:
+                self.supabase.table("conversations").update({
+                    "status": "failed",
+                    "content": f"Error: {str(e)}"
+                }).eq("id", request.message_id).execute()
+            except:
+                pass  # Ignore errors when trying to update status
+            
+            print(f"Error in update_message_with_profile: {e}")
+            raise
+    
+    async def _generate_direct_response_for_update(self, context_messages, system_prompt_content):
+        """Generate direct LLM response for update flow."""
+        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+        
+        # Convert context to LangChain format
+        lc_messages = [SystemMessage(content=system_prompt_content)]
+        
+        for msg in context_messages:
+            if msg["role"] == "user":
+                lc_messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                lc_messages.append(AIMessage(content=msg["content"]))
+        
+        # Get response from LLM
+        response = await self.llm.ainvoke(lc_messages)
+        return response.content
+    
+    async def _generate_react_response_for_update(self, context_messages, system_prompt_content, conversation_id):
+        """Generate ReAct reasoning response for update flow."""
+        # Get the last user message for ReAct processing
+        last_user_message = ""
+        for msg in reversed(context_messages):
+            if msg["role"] == "user":
+                last_user_message = msg["content"]
+                break
+        
+        if not last_user_message:
+            # Fallback to direct response if no user message found
+            return await self._generate_direct_response_for_update(context_messages, system_prompt_content)
+        
+        # Convert context to LangChain message format for history
+        from langchain_core.messages import HumanMessage, AIMessage
+        conversation_history = []
+        
+        for msg in context_messages[:-1]:  # Exclude the last user message as it will be processed separately
+            if msg["role"] == "user":
+                conversation_history.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                conversation_history.append(AIMessage(content=msg["content"]))
+        
+        # Process with ReAct reasoning
+        reasoning_result = await self.react_reasoner.process_with_reasoning(
+            user_input=last_user_message,
+            system_prompt=system_prompt_content,
+            conversation_history=conversation_history,
+            supabase_client=self.supabase,
+            conversation_id=conversation_id
+        )
+        
+        return reasoning_result["final_answer"]
